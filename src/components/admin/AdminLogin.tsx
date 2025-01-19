@@ -78,7 +78,18 @@ export const AdminLogin = () => {
         type: 'sms'
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('expired')) {
+          toast({
+            variant: "destructive",
+            title: "OTP Expired",
+            description: "The verification code has expired. Please request a new one.",
+          });
+          setOtp("");
+          return;
+        }
+        throw error;
+      }
 
       // After successful verification, create admin user record
       const { error: adminError } = await supabase
@@ -137,9 +148,21 @@ export const AdminLogin = () => {
               onChange={(e) => setOtp(e.target.value)}
               className="w-full"
             />
-            <Button onClick={handleVerifyOTP} className="w-full">
-              Verify OTP
-            </Button>
+            <div className="space-y-2">
+              <Button onClick={handleVerifyOTP} className="w-full">
+                Verify OTP
+              </Button>
+              <Button 
+                onClick={() => {
+                  setOtp("");
+                  handleSendOTP();
+                }} 
+                variant="outline" 
+                className="w-full"
+              >
+                Resend OTP
+              </Button>
+            </div>
           </>
         )}
       </div>

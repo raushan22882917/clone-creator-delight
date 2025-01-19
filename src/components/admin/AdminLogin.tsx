@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 export const AdminLogin = () => {
@@ -44,21 +44,28 @@ export const AdminLogin = () => {
 
       const { data, error } = await supabase.auth.signInWithOtp({
         phone: formattedPhone,
+        options: {
+          channel: 'sms',
+          data: {
+            role: 'admin'
+          }
+        }
       });
 
       if (error) throw error;
 
       toast({
         title: "OTP Sent",
-        description: "Please check your WhatsApp for the verification code.",
+        description: "Please check your phone for the verification code.",
       });
       setShowOtpInput(true);
       setPhoneNumber(formattedPhone); // Store the formatted number
     } catch (error: any) {
+      console.error('OTP Error:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to send OTP. Please try again.",
       });
     }
   };
@@ -91,10 +98,11 @@ export const AdminLogin = () => {
         description: "Admin verified successfully!",
       });
     } catch (error: any) {
+      console.error('Verification Error:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to verify OTP. Please try again.",
       });
     }
   };

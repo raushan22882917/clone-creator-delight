@@ -10,10 +10,40 @@ export const AdminLogin = () => {
   const [showOtpInput, setShowOtpInput] = useState(false);
   const { toast } = useToast();
 
+  const formatPhoneNumber = (phone: string) => {
+    // Remove any non-digit characters
+    const digits = phone.replace(/\D/g, '');
+    
+    // Check if the number already has a country code
+    if (digits.startsWith('91')) {
+      return `+${digits}`;
+    }
+    
+    // Add Indian country code if not present
+    return `+91${digits}`;
+  };
+
+  const validatePhoneNumber = (phone: string) => {
+    // Basic validation for Indian phone numbers
+    const phoneRegex = /^\+91[1-9]\d{9}$/;
+    return phoneRegex.test(phone);
+  };
+
   const handleSendOTP = async () => {
     try {
+      const formattedPhone = formatPhoneNumber(phoneNumber);
+      
+      if (!validatePhoneNumber(formattedPhone)) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Phone Number",
+          description: "Please enter a valid 10-digit Indian phone number.",
+        });
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithOtp({
-        phone: phoneNumber,
+        phone: formattedPhone,
       });
 
       if (error) throw error;
@@ -23,6 +53,7 @@ export const AdminLogin = () => {
         description: "Please check your WhatsApp for the verification code.",
       });
       setShowOtpInput(true);
+      setPhoneNumber(formattedPhone); // Store the formatted number
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -75,11 +106,14 @@ export const AdminLogin = () => {
         <div>
           <Input
             type="tel"
-            placeholder="Enter phone number"
+            placeholder="Enter phone number (e.g., 9999999999)"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             className="w-full"
           />
+          <p className="text-sm text-gray-500 mt-1">
+            Enter 10 digits without country code. +91 will be added automatically.
+          </p>
         </div>
         
         {!showOtpInput ? (

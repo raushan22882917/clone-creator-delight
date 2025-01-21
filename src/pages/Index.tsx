@@ -7,12 +7,10 @@ import { OrderStatus } from "@/components/dashboard/OrderStatus";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
 
   useEffect(() => {
     checkAdminStatus();
@@ -21,79 +19,17 @@ const Index = () => {
   const checkAdminStatus = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.phone) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
+      if (session?.user) {
+        const { data: adminData } = await supabase
+          .from('admin_users')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single();
+        
+        setIsAdmin(!!adminData?.is_verified);
       }
-
-      // First check if admin exists
-      const { data: adminData, error: adminError } = await supabase
-        .from('admin_data')
-        .select('*')
-        .eq('phone_number', session.user.phone)
-        .maybeSingle();
-      
-      if (adminError) {
-        console.error('Error checking admin status:', adminError);
-        toast({
-          title: "Error",
-          description: "Failed to verify admin status. Please try again.",
-          variant: "destructive",
-        });
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      // If no admin data found
-      if (!adminData) {
-        toast({
-          title: "Unauthorized",
-          description: "This phone number is not registered as an admin.",
-          variant: "destructive",
-        });
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      // If admin exists but is not verified
-      if (!adminData.is_verified) {
-        toast({
-          title: "Access Denied",
-          description: "Your admin account is not verified yet.",
-          variant: "destructive",
-        });
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      setIsAdmin(true);
-      
-      // Update last login time
-      const { error: updateError } = await supabase
-        .from('admin_data')
-        .update({ 
-          last_login: new Date().toISOString(),
-          login_attempts: (adminData.login_attempts || 0) + 1
-        })
-        .eq('phone_number', session.user.phone);
-
-      if (updateError) {
-        console.error('Error updating last login:', updateError);
-      }
-
     } catch (error) {
       console.error('Error checking admin status:', error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
-      setIsAdmin(false);
     } finally {
       setLoading(false);
     }

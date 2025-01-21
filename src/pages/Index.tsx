@@ -33,7 +33,7 @@ const Index = () => {
         .from('admin_data')
         .select('*')
         .eq('phone_number', session.user.phone)
-        .single();
+        .maybeSingle();
       
       if (adminError) {
         console.error('Error checking admin status:', adminError);
@@ -47,8 +47,20 @@ const Index = () => {
         return;
       }
 
+      // If no admin data found
+      if (!adminData) {
+        toast({
+          title: "Unauthorized",
+          description: "This phone number is not registered as an admin.",
+          variant: "destructive",
+        });
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+
       // If admin exists but is not verified
-      if (!adminData?.is_verified) {
+      if (!adminData.is_verified) {
         toast({
           title: "Access Denied",
           description: "Your admin account is not verified yet.",

@@ -20,7 +20,7 @@ const Index = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.phone) {
-        // Remove any spaces and ensure the phone number is properly formatted
+        // Remove any spaces and ensure proper phone number format
         const formattedPhone = session.user.phone.replace(/\s+/g, '');
         
         const { data: adminData, error } = await supabase

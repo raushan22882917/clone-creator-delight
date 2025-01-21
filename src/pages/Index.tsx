@@ -19,20 +19,42 @@ const Index = () => {
   const checkAdminStatus = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: adminData, error } = await supabase
-          .from('admin_data')
-          .select('*')
-          .eq('phone_number', session.user.phone)
-          .maybeSingle();
-        
-        if (error) {
-          console.error('Error checking admin status:', error);
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(!!adminData?.is_verified);
-        }
+      
+      if (!session?.user?.phone) {
+        setIsAdmin(false);
+        return;
       }
+
+      const { data: adminData, error } = await supabase
+        .from('admin_data')
+        .select('*')
+        .eq('phone_number', session.user.phone)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+        return;
+      }
+
+      // If no admin data found or not verified, set isAdmin to false
+      if (!adminData || !adminData.is_verified) {
+        setIsAdmin(false);
+        return;
+      }
+
+      setIsAdmin(true);
+      
+      // Update last login time
+      const { error: updateError } = await supabase
+        .from('admin_data')
+        .update({ last_login: new Date().toISOString() })
+        .eq('phone_number', session.user.phone);
+
+      if (updateError) {
+        console.error('Error updating last login:', updateError);
+      }
+
     } catch (error) {
       console.error('Error checking admin status:', error);
       setIsAdmin(false);

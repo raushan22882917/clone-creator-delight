@@ -38,23 +38,11 @@ export const AdminLogin = () => {
         return;
       }
 
-      const response = await fetch(
-        `${process.env.SUPABASE_URL}/functions/v1/send-otp`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ phone: formattedPhone }),
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { phone: formattedPhone }
+      });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send OTP');
-      }
+      if (error) throw error;
 
       toast({
         title: "OTP Sent",
@@ -78,39 +66,26 @@ export const AdminLogin = () => {
     try {
       setIsLoading(true);
 
-      // First verify with Twilio
-      const verifyResponse = await fetch(
-        `${process.env.SUPABASE_URL}/functions/v1/verify-otp`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ phone: phoneNumber, code: otp }),
-        }
-      );
+      const { data, error: verifyError } = await supabase.functions.invoke('verify-otp', {
+        body: { phone: phoneNumber, code: otp }
+      });
 
-      const verifyData = await verifyResponse.json();
-
-      if (!verifyResponse.ok) {
-        throw new Error(verifyData.error || 'Failed to verify OTP');
-      }
+      if (verifyError) throw verifyError;
 
       // If verification successful, sign in with Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
         phone: phoneNumber,
         password: otp,
       });
 
-      if (error) throw error;
+      if (signInError) throw signInError;
 
       // Create admin user record
       const { error: adminError } = await supabase
         .from('admin_users')
         .insert([
           {
-            user_id: data.user?.id,
+            user_id: authData.user?.id,
             phone_number: phoneNumber,
             is_verified: true
           }
@@ -124,7 +99,7 @@ export const AdminLogin = () => {
       });
     } catch (error: any) {
       console.error('Verification Error:', error);
-      if (error.message.includes('expired')) {
+      if (error.message?.includes('expired')) {
         toast({
           variant: "destructive",
           title: "OTP Expired",
@@ -154,7 +129,7 @@ export const AdminLogin = () => {
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             className="w-full"
-            disabled={isLoading}
+            disabled={isLoading || showOtpInput}
           />
           <p className="text-sm text-gray-500 mt-1">
             Enter 10 digits without country code. +91 will be added automatically.

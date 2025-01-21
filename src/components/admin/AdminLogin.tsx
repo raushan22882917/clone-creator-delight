@@ -8,29 +8,25 @@ export const AdminLogin = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [showOtpInput, setShowOtpInput] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const formatPhoneNumber = (phone: string) => {
-    // Remove any non-digit characters
     const digits = phone.replace(/\D/g, '');
-    
-    // Check if the number already has a country code
     if (digits.startsWith('91')) {
       return `+${digits}`;
     }
-    
-    // Add Indian country code if not present
     return `+91${digits}`;
   };
 
   const validatePhoneNumber = (phone: string) => {
-    // Basic validation for Indian phone numbers
     const phoneRegex = /^\+91[1-9]\d{9}$/;
     return phoneRegex.test(phone);
   };
 
   const handleSendOTP = async () => {
     try {
+      setIsLoading(true);
       const formattedPhone = formatPhoneNumber(phoneNumber);
       
       if (!validatePhoneNumber(formattedPhone)) {
@@ -42,24 +38,30 @@ export const AdminLogin = () => {
         return;
       }
 
-      const { data, error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-        options: {
-          channel: 'sms',
-          data: {
-            role: 'admin'
-          }
+      const response = await fetch(
+        `${process.env.SUPABASE_URL}/functions/v1/send-otp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ phone: formattedPhone }),
         }
-      });
+      );
 
-      if (error) throw error;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send OTP');
+      }
 
       toast({
         title: "OTP Sent",
         description: "Please check your phone for the verification code.",
       });
       setShowOtpInput(true);
-      setPhoneNumber(formattedPhone); // Store the formatted number
+      setPhoneNumber(formattedPhone);
     } catch (error: any) {
       console.error('OTP Error:', error);
       toast({
@@ -67,31 +69,43 @@ export const AdminLogin = () => {
         title: "Error",
         description: error.message || "Failed to send OTP. Please try again.",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleVerifyOTP = async () => {
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: phoneNumber,
-        token: otp,
-        type: 'sms'
-      });
+      setIsLoading(true);
 
-      if (error) {
-        if (error.message.includes('expired')) {
-          toast({
-            variant: "destructive",
-            title: "OTP Expired",
-            description: "The verification code has expired. Please request a new one.",
-          });
-          setOtp("");
-          return;
+      // First verify with Twilio
+      const verifyResponse = await fetch(
+        `${process.env.SUPABASE_URL}/functions/v1/verify-otp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ phone: phoneNumber, code: otp }),
         }
-        throw error;
+      );
+
+      const verifyData = await verifyResponse.json();
+
+      if (!verifyResponse.ok) {
+        throw new Error(verifyData.error || 'Failed to verify OTP');
       }
 
-      // After successful verification, create admin user record
+      // If verification successful, sign in with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        phone: phoneNumber,
+        password: otp,
+      });
+
+      if (error) throw error;
+
+      // Create admin user record
       const { error: adminError } = await supabase
         .from('admin_users')
         .insert([
@@ -110,11 +124,22 @@ export const AdminLogin = () => {
       });
     } catch (error: any) {
       console.error('Verification Error:', error);
+      if (error.message.includes('expired')) {
+        toast({
+          variant: "destructive",
+          title: "OTP Expired",
+          description: "The verification code has expired. Please request a new one.",
+        });
+        setOtp("");
+        return;
+      }
       toast({
         variant: "destructive",
         title: "Error",
         description: error.message || "Failed to verify OTP. Please try again.",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -129,6 +154,7 @@ export const AdminLogin = () => {
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             className="w-full"
+            disabled={isLoading}
           />
           <p className="text-sm text-gray-500 mt-1">
             Enter 10 digits without country code. +91 will be added automatically.
@@ -136,8 +162,12 @@ export const AdminLogin = () => {
         </div>
         
         {!showOtpInput ? (
-          <Button onClick={handleSendOTP} className="w-full">
-            Send OTP
+          <Button 
+            onClick={handleSendOTP} 
+            className="w-full"
+            disabled={isLoading}
+          >
+            {isLoading ? "Sending..." : "Send OTP"}
           </Button>
         ) : (
           <>
@@ -147,10 +177,15 @@ export const AdminLogin = () => {
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               className="w-full"
+              disabled={isLoading}
             />
             <div className="space-y-2">
-              <Button onClick={handleVerifyOTP} className="w-full">
-                Verify OTP
+              <Button 
+                onClick={handleVerifyOTP} 
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Verifying..." : "Verify OTP"}
               </Button>
               <Button 
                 onClick={() => {
@@ -159,6 +194,7 @@ export const AdminLogin = () => {
                 }} 
                 variant="outline" 
                 className="w-full"
+                disabled={isLoading}
               >
                 Resend OTP
               </Button>

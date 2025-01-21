@@ -7,10 +7,12 @@ import { OrderStatus } from "@/components/dashboard/OrderStatus";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     checkAdminStatus();
@@ -22,24 +24,38 @@ const Index = () => {
       
       if (!session?.user?.phone) {
         setIsAdmin(false);
+        setLoading(false);
         return;
       }
 
-      const { data: adminData, error } = await supabase
+      // First check if admin exists
+      const { data: adminData, error: adminError } = await supabase
         .from('admin_data')
         .select('*')
         .eq('phone_number', session.user.phone)
-        .maybeSingle();
+        .single();
       
-      if (error) {
-        console.error('Error checking admin status:', error);
+      if (adminError) {
+        console.error('Error checking admin status:', adminError);
+        toast({
+          title: "Error",
+          description: "Failed to verify admin status. Please try again.",
+          variant: "destructive",
+        });
         setIsAdmin(false);
+        setLoading(false);
         return;
       }
 
-      // If no admin data found or not verified, set isAdmin to false
-      if (!adminData || !adminData.is_verified) {
+      // If admin exists but is not verified
+      if (!adminData?.is_verified) {
+        toast({
+          title: "Access Denied",
+          description: "Your admin account is not verified yet.",
+          variant: "destructive",
+        });
         setIsAdmin(false);
+        setLoading(false);
         return;
       }
 
@@ -48,7 +64,10 @@ const Index = () => {
       // Update last login time
       const { error: updateError } = await supabase
         .from('admin_data')
-        .update({ last_login: new Date().toISOString() })
+        .update({ 
+          last_login: new Date().toISOString(),
+          login_attempts: (adminData.login_attempts || 0) + 1
+        })
         .eq('phone_number', session.user.phone);
 
       if (updateError) {
@@ -57,6 +76,11 @@ const Index = () => {
 
     } catch (error) {
       console.error('Error checking admin status:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
       setIsAdmin(false);
     } finally {
       setLoading(false);

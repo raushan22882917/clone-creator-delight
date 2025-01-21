@@ -20,16 +20,22 @@ const Index = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { data: adminData } = await supabase
-          .from('admin_users')
+        const { data: adminData, error } = await supabase
+          .from('admin_data')
           .select('*')
-          .eq('user_id', session.user.id)
-          .single();
+          .eq('phone_number', session.user.phone)
+          .maybeSingle();
         
-        setIsAdmin(!!adminData?.is_verified);
+        if (error) {
+          console.error('Error checking admin status:', error);
+          setIsAdmin(false);
+        } else {
+          setIsAdmin(!!adminData?.is_verified);
+        }
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
+      setIsAdmin(false);
     } finally {
       setLoading(false);
     }

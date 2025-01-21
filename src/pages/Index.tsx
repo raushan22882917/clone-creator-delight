@@ -19,28 +19,17 @@ const Index = () => {
   const checkAdminStatus = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.phone) {
-        // Remove any spaces and ensure proper phone number format
-        const formattedPhone = session.user.phone.replace(/\s+/g, '');
-        
-        const { data: adminData, error } = await supabase
-          .from('admin_data')
+      if (session?.user) {
+        const { data: adminData } = await supabase
+          .from('admin_users')
           .select('*')
-          .eq('phone_number', formattedPhone)
-          .maybeSingle();
+          .eq('user_id', session.user.id)
+          .single();
         
-        if (error) {
-          console.error('Error checking admin status:', error);
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(!!adminData?.is_verified);
-        }
-      } else {
-        setIsAdmin(false);
+        setIsAdmin(!!adminData?.is_verified);
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
-      setIsAdmin(false);
     } finally {
       setLoading(false);
     }

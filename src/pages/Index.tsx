@@ -20,10 +20,13 @@ const Index = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.phone) {
+        // Remove any spaces and ensure the phone number is properly formatted
+        const formattedPhone = session.user.phone.replace(/\s+/g, '');
+        
         const { data: adminData, error } = await supabase
           .from('admin_data')
           .select('*')
-          .eq('phone_number', session.user.phone)
+          .eq('phone_number', formattedPhone)
           .maybeSingle();
         
         if (error) {

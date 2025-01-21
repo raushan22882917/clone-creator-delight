@@ -38,8 +38,24 @@ export const AdminLogin = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('send-otp', {
-        body: { phone: formattedPhone }
+      // First check if the phone number is registered as admin
+      const { data: adminData, error: adminError } = await supabase
+        .from('admin_data')
+        .select('*')
+        .eq('phone_number', formattedPhone)
+        .single();
+
+      if (adminError || !adminData) {
+        toast({
+          variant: "destructive",
+          title: "Unauthorized",
+          description: "This phone number is not registered as an admin.",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone
       });
 
       if (error) throw error;
@@ -66,30 +82,22 @@ export const AdminLogin = () => {
     try {
       setIsLoading(true);
 
-      const { data, error: verifyError } = await supabase.functions.invoke('verify-otp', {
-        body: { phone: phoneNumber, code: otp }
-      });
-
-      if (verifyError) throw verifyError;
-
-      // If verification successful, sign in with Supabase
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.verifyOtp({
         phone: phoneNumber,
-        password: otp,
+        token: otp,
+        type: 'sms'
       });
 
-      if (signInError) throw signInError;
+      if (error) throw error;
 
-      // Create admin user record
+      // Update admin record
       const { error: adminError } = await supabase
-        .from('admin_users')
-        .insert([
-          {
-            user_id: authData.user?.id,
-            phone_number: phoneNumber,
-            is_verified: true
-          }
-        ]);
+        .from('admin_data')
+        .update({
+          is_verified: true,
+          last_login: new Date().toISOString()
+        })
+        .eq('phone_number', phoneNumber);
 
       if (adminError) throw adminError;
 

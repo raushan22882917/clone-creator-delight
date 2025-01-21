@@ -43,7 +43,12 @@ export const AdminLogin = () => {
         .from('admin_data')
         .select('*')
         .eq('phone_number', formattedPhone)
-        .single();
+        .maybeSingle();
+
+      if (adminCheckError) {
+        console.error('Admin check error:', adminCheckError);
+        throw adminCheckError;
+      }
 
       if (!adminData) {
         toast({

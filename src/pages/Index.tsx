@@ -4,45 +4,8 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { TrafficDonut } from "@/components/dashboard/TrafficDonut";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { OrderStatus } from "@/components/dashboard/OrderStatus";
-import { AdminLogin } from "@/components/admin/AdminLogin";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    checkAdminStatus();
-  }, []);
-
-  const checkAdminStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: adminData } = await supabase
-          .from('admin_users')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single();
-        
-        setIsAdmin(!!adminData?.is_verified);
-      }
-    } catch (error) {
-      console.error('Error checking admin status:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
-
-  if (!isAdmin) {
-    return <AdminLogin />;
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />

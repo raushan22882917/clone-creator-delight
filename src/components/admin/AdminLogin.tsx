@@ -38,8 +38,8 @@ export const AdminLogin = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('send-otp', {
-        body: { phone: formattedPhone }
+      const { data, error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
       });
 
       if (error) throw error;
@@ -66,30 +66,26 @@ export const AdminLogin = () => {
     try {
       setIsLoading(true);
 
-      const { data, error: verifyError } = await supabase.functions.invoke('verify-otp', {
-        body: { phone: phoneNumber, code: otp }
-      });
-
-      if (verifyError) throw verifyError;
-
-      // If verification successful, sign in with Supabase
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.verifyOtp({
         phone: phoneNumber,
-        password: otp,
+        token: otp,
+        type: 'sms'
       });
 
-      if (signInError) throw signInError;
+      if (error) throw error;
 
-      // Create admin user record
+      // After successful verification, create admin user record if it doesn't exist
       const { error: adminError } = await supabase
         .from('admin_users')
-        .insert([
+        .upsert([
           {
-            user_id: authData.user?.id,
+            user_id: data.user?.id,
             phone_number: phoneNumber,
             is_verified: true
           }
-        ]);
+        ], {
+          onConflict: 'user_id'
+        });
 
       if (adminError) throw adminError;
 
@@ -99,15 +95,6 @@ export const AdminLogin = () => {
       });
     } catch (error: any) {
       console.error('Verification Error:', error);
-      if (error.message?.includes('expired')) {
-        toast({
-          variant: "destructive",
-          title: "OTP Expired",
-          description: "The verification code has expired. Please request a new one.",
-        });
-        setOtp("");
-        return;
-      }
       toast({
         variant: "destructive",
         title: "Error",

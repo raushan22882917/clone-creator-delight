@@ -38,8 +38,24 @@ export const AdminLogin = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('send-otp', {
-        body: { phone: formattedPhone }
+      // Check if the phone number belongs to an admin
+      const { data: adminData, error: adminCheckError } = await supabase
+        .from('admin_data')
+        .select('*')
+        .eq('phone_number', formattedPhone)
+        .single();
+
+      if (!adminData) {
+        toast({
+          variant: "destructive",
+          title: "Unauthorized",
+          description: "This phone number is not registered as an admin.",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
       });
 
       if (error) throw error;
@@ -50,6 +66,15 @@ export const AdminLogin = () => {
       });
       setShowOtpInput(true);
       setPhoneNumber(formattedPhone);
+
+      // Update login attempts
+      await supabase
+        .from('admin_data')
+        .update({ 
+          login_attempts: (adminData.login_attempts || 0) + 1 
+        })
+        .eq('phone_number', formattedPhone);
+
     } catch (error: any) {
       console.error('OTP Error:', error);
       toast({
@@ -66,32 +91,24 @@ export const AdminLogin = () => {
     try {
       setIsLoading(true);
 
-      const { data, error: verifyError } = await supabase.functions.invoke('verify-otp', {
-        body: { phone: phoneNumber, code: otp }
-      });
-
-      if (verifyError) throw verifyError;
-
-      // If verification successful, sign in with Supabase
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.verifyOtp({
         phone: phoneNumber,
-        password: otp,
+        token: otp,
+        type: 'sms'
       });
 
-      if (signInError) throw signInError;
+      if (error) throw error;
 
-      // Create admin user record
-      const { error: adminError } = await supabase
-        .from('admin_users')
-        .insert([
-          {
-            user_id: authData.user?.id,
-            phone_number: phoneNumber,
-            is_verified: true
-          }
-        ]);
+      // Update admin data
+      const { error: updateError } = await supabase
+        .from('admin_data')
+        .update({ 
+          is_verified: true,
+          last_login: new Date().toISOString()
+        })
+        .eq('phone_number', phoneNumber);
 
-      if (adminError) throw adminError;
+      if (updateError) throw updateError;
 
       toast({
         title: "Success",

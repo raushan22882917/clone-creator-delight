@@ -21,9 +21,9 @@ const Index = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data: adminData } = await supabase
-          .from('admin_users')
+          .from('admin_data')
           .select('*')
-          .eq('user_id', session.user.id)
+          .eq('phone_number', session.user.phone)
           .single();
         
         setIsAdmin(!!adminData?.is_verified);

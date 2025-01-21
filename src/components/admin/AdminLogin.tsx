@@ -38,8 +38,8 @@ export const AdminLogin = () => {
         return;
       }
 
-      const { data, error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { phone: formattedPhone }
       });
 
       if (error) throw error;
@@ -66,26 +66,30 @@ export const AdminLogin = () => {
     try {
       setIsLoading(true);
 
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: phoneNumber,
-        token: otp,
-        type: 'sms'
+      const { data, error: verifyError } = await supabase.functions.invoke('verify-otp', {
+        body: { phone: phoneNumber, code: otp }
       });
 
-      if (error) throw error;
+      if (verifyError) throw verifyError;
 
-      // After successful verification, create admin user record if it doesn't exist
+      // If verification successful, sign in with Supabase
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        phone: phoneNumber,
+        password: otp,
+      });
+
+      if (signInError) throw signInError;
+
+      // Create admin user record
       const { error: adminError } = await supabase
         .from('admin_users')
-        .upsert([
+        .insert([
           {
-            user_id: data.user?.id,
+            user_id: authData.user?.id,
             phone_number: phoneNumber,
             is_verified: true
           }
-        ], {
-          onConflict: 'user_id'
-        });
+        ]);
 
       if (adminError) throw adminError;
 
@@ -95,6 +99,15 @@ export const AdminLogin = () => {
       });
     } catch (error: any) {
       console.error('Verification Error:', error);
+      if (error.message?.includes('expired')) {
+        toast({
+          variant: "destructive",
+          title: "OTP Expired",
+          description: "The verification code has expired. Please request a new one.",
+        });
+        setOtp("");
+        return;
+      }
       toast({
         variant: "destructive",
         title: "Error",
